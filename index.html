@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bittle-servo crane</title>
+<style>
+:root { --bg:#fbfaf7; --ink:#1d1d1b; --muted:#6b6a65; --acc:#1f6fd1; --acc2:#d1641f; --line:#d9d6cf; --ok:#2a8a3e; --bad:#c0392b; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16171a; --ink:#ecebe7; --muted:#9a998f; --acc:#5aa2ff; --acc2:#ff9a52; --line:#33343a; --ok:#5cc46f; --bad:#ff6b5b; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui, sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:1.9rem; margin:0 0 4px; } h2 { margin-top:2.2em; border-bottom:1px solid var(--line); padding-bottom:4px; }
+.lede { color:var(--muted); margin-top:0; }
+.stage { display:grid; grid-template-columns:1fr 280px; gap:16px; align-items:start; }
+@media (max-width:720px) { .stage { grid-template-columns:1fr; } }
+svg { width:100%; height:auto; border:1px solid var(--line); border-radius:8px; }
+label { display:block; font-size:.9rem; margin-top:10px; } input[type=range] { width:100%; }
+.read { font-variant-numeric:tabular-nums; font-size:.9rem; border-top:1px solid var(--line); margin-top:12px; padding-top:8px; }
+.read b { display:inline-block; min-width:9ch; }
+.ok { color:var(--ok); } .bad { color:var(--bad); }
+table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+.note { font-size:.88rem; color:var(--muted); }
+code { font-size:.9em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Bittle-servo crane</h1>
+<p class="lede">A two-joint arm with a gripper, driven by three Petoi Bittle servos. Both arm servos sit on the base; a parallelogram linkage carries the elbow drive up the arm.</p>
+
+<h2>Try it</h2>
+<div class="stage">
+  <svg id="v" viewBox="-60 -200 300 240" role="img" aria-label="Side view of the crane"></svg>
+  <div>
+    <label>Shoulder servo S1 (upper arm), <span id="o1"></span>°<input id="s1" type="range" min="20" max="150" value="70"></label>
+    <label>Elbow servo S2 (forearm, absolute), <span id="o2"></span>°<input id="s2" type="range" min="-60" max="60" value="0"></label>
+    <label>Payload, <span id="op"></span> g<input id="pl" type="range" min="0" max="100" value="20"></label>
+    <label><input id="lvl" type="checkbox" checked> Second parallelogram keeps the gripper level</label>
+    <div class="read" id="r"></div>
+  </div>
+</div>
+<p class="note">Blue: driven links. Orange: the passive parallelogram (crank on the base, rod parallel to the upper arm). Grey: the optional levelling parallelogram. Angles from horizontal. Torques are static, at the current pose, with ideal frictionless joints.</p>
+
+<h2>The idea</h2>
+<p>Stacking servos puts each motor's 14 g on the joint below it, so the shoulder lifts the elbow servo as dead load. Here the elbow servo S2 sits on the base, coaxial with the shoulder S1. It turns a short crank. A rod, the same length as the upper arm and parallel to it, joins the crank tip to a lever on the back of the forearm. Crank, rod, forearm lever and upper arm form a parallelogram, a four-bar whose coupler stays parallel to the frame (the coupler and four-bar lab in the <a href="https://abdulhamid-baghdadi.github.io/master-lectures-aid-kit/handling-lab/#coupler">handling lab</a>, after Berger 2021, ch. 4).</p>
+<p>Two things follow:</p>
+<ul>
+<li><b>Decoupled joints.</b> The forearm angle measured from the ground equals the crank angle, whatever the shoulder does. Moving S1 lifts the forearm without tilting it, which makes crane work (keep the load level, lift it) a single-servo move.</li>
+<li><b>Light arm.</b> Only the gripper servo rides on the arm. A second parallelogram, from a fixed bar on the base through the elbow to the wrist, keeps the gripper level with no motor at all.</li>
+</ul>
+<p>The price: the parallelogram jams when crank and upper arm line up (dead centre). The relative angle between upper arm and forearm must stay inside about 30° to 150°; the demo turns red outside it and the firmware should clamp it.</p>
+
+<h2>Dimensions</h2>
+<table>
+<tr><th>Part</th><th>Length</th><th>Why</th></tr>
+<tr><td>Upper arm (S1 axis to elbow)</td><td>80 mm</td><td>Reach of 160 mm keeps shoulder torque near a third of the servo's stall torque.</td></tr>
+<tr><td>Forearm (elbow to wrist)</td><td>80 mm</td><td>Equal links give the largest reachable area for a given total.</td></tr>
+<tr><td>Crank on S2 = forearm rear lever</td><td>20 mm</td><td>Must be equal for a true parallelogram; shorter means more rod force, longer means a bulkier base.</td></tr>
+<tr><td>Push rod</td><td>80 mm</td><td>Must equal the upper arm.</td></tr>
+<tr><td>Gripper (servo S3 at wrist)</td><td>about 40 g with servo</td><td>Estimate; weigh yours and change <code>GRIP</code> in the page source.</td></tr>
+</table>
+
+<h2>Servo</h2>
+<p>Petoi lists the P1S as a slim, fast servo with 270° of controllable travel. A RobotShop listing of the Bittle 10-servo set gives 3 kg·cm stall torque, 14 g, 30 × 24 × 12 mm, 0.07 s/60° and 6.0–8.4 V. That listing does not name the P1S, so <b>treat 3 kg·cm as unconfirmed</b> and measure it before relying on the margins below.</p>
+<ul class="note">
+<li><a href="https://www.petoi.com/pages/bittle-robot-dog-specifications">Petoi, Bittle specifications</a></li>
+<li><a href="https://uk.robotshop.com/products/servo-set-bittle-robot-dog-10x">RobotShop, Servo set for Bittle (10 servos)</a></li>
+</ul>
+
+<h2>Parts</h2>
+<table>
+<tr><th>Qty</th><th>Item</th></tr>
+<tr><td>3</td><td>Petoi Bittle servos (S1 shoulder, S2 elbow drive, S3 gripper)</td></tr>
+<tr><td>1</td><td>Base plate holding S1 and S2 face to face on one axis (S2 shaft through a bearing in the shoulder hub, or S1 and S2 on either side of the arm)</td></tr>
+<tr><td>2</td><td>Upper-arm side plates, 80 mm between holes</td></tr>
+<tr><td>1</td><td>Forearm with a 20 mm rear lever</td></tr>
+<tr><td>1</td><td>Push rod, 80 mm between holes; 1 crank, 20 mm</td></tr>
+<tr><td>2</td><td>Optional levelling bar and rod</td></tr>
+<tr><td>—</td><td>M2 screws with shoulder spacers or 2 × 5 mm bearings at each pivot; the Bittle board or any PWM controller</td></tr>
+</table>
+
+<h2>Control</h2>
+<p>Because the joints are decoupled, the servo angles come straight from the pose, with no cross term:</p>
+<pre><code>S1 = θ_upper_arm           // from horizontal
+S2 = θ_forearm             // absolute, through the parallelogram
+check 30° ≤ θ_upper − θ_forearm ≤ 150°   // keep clear of dead centre</code></pre>
+<p>Inverse kinematics for a wrist target (x, y) with equal links L: <code>d = √(x²+y²)</code>, <code>α = atan2(y, x)</code>, <code>β = acos(d / 2L)</code>, then <code>θ_upper = α + β</code>, <code>θ_forearm = α − β</code>.</p>
+
+<h2>Limits</h2>
+<ul>
+<li>A planar arm: no base rotation, as asked (two degrees of freedom plus the gripper). A turntable servo can be added under the base later without changing the arm.</li>
+<li>Static torques only; servo speed, friction and joint play are left out.</li>
+<li>Masses are estimates; the stall torque is from a reseller listing, not a Petoi datasheet.</li>
+<li>Not built or tested yet.</li>
+</ul>
+</main>
+<script>
+// Masses in g, lengths in mm; estimates, see the dimensions table.
+const L1 = 80, L2 = 80, R = 20, GRIP = 40, M_UPPER = 12, M_FORE = 10, STALL = 30; // STALL in kg·mm (3 kg·cm, unconfirmed)
+const $ = id => document.getElementById(id), rad = d => d * Math.PI / 180;
+const ns = "http://www.w3.org/2000/svg";
+function el(tag, at) { const e = document.createElementNS(ns, tag); for (const k in at) e.setAttribute(k, at[k]); return e; }
+function line(a, b, color, w, dash) { return el("line", { x1:a[0], y1:-a[1], x2:b[0], y2:-b[1], stroke:color, "stroke-width":w, "stroke-linecap":"round", ...(dash ? { "stroke-dasharray":dash } : {}) }); }
+function dot(p, r, fill) { return el("circle", { cx:p[0], cy:-p[1], r, fill }); }
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function draw() {
+  const t1 = +$("s1").value, t2 = +$("s2").value, pl = +$("pl").value;
+  $("o1").textContent = t1; $("o2").textContent = t2; $("op").textContent = pl;
+  const a1 = rad(t1), a2 = rad(t2);
+  const O = [0, 0], E = [L1 * Math.cos(a1), L1 * Math.sin(a1)], W = [E[0] + L2 * Math.cos(a2), E[1] + L2 * Math.sin(a2)];
+  // Crank on S2 points opposite the forearm, so crank, rod, lever and upper arm form a parallelogram.
+  const C = [-R * Math.cos(a2), -R * Math.sin(a2)], Lv = [E[0] + C[0], E[1] + C[1]];
+  const rel = t1 - t2, safe = rel >= 30 && rel <= 150;
+  const v = $("v"); v.replaceChildren();
+  const ink = css("--ink"), acc = css("--acc"), acc2 = css("--acc2"), muted = css("--muted");
+  v.append(line([-50, -12], [60, -12], muted, 2), el("rect", { x:-20, y:0, width:40, height:12, fill:"none", stroke:muted }));
+  if ($("lvl").checked) { const k = [0, 14]; v.append(line(k, [E[0] + k[0], E[1] + k[1]], muted, 1.5, "4 3"), line([E[0], E[1]], [E[0] + k[0], E[1] + k[1]], muted, 1.5, "4 3")); }
+  v.append(line(O, C, acc2, 4), line(C, Lv, acc2, 3), line(E, Lv, acc2, 4));
+  v.append(line(O, E, acc, 7), line(E, W, safe ? acc : css("--bad"), 6));
+  const g = rad($("lvl").checked ? 0 : t2), j = 14;
+  const gp = (dx, dy) => [W[0] + dx * Math.cos(g) - dy * Math.sin(g), W[1] + dx * Math.sin(g) + dy * Math.cos(g)];
+  v.append(line(W, gp(10, 0), ink, 4), line(gp(10, -j / 2), gp(10, j / 2), ink, 3), line(gp(10, -j / 2), gp(26, -j / 2), ink, 3), line(gp(10, j / 2), gp(26, j / 2), ink, 3));
+  [O, E, C, Lv, W].forEach(p => v.append(dot(p, 3.5, ink)));
+  v.append(dot(O, 7, "none")); v.lastChild.setAttribute("stroke", ink);
+  // Static moments about the base axis (shoulder) and the elbow, in g·mm, divided by 1000 for kg·mm.
+  const tip = GRIP + pl;
+  const Melbow = Math.abs(tip * L2 * Math.cos(a2) + M_FORE * L2 / 2 * Math.cos(a2)) / 1000;
+  const Mshoulder = Math.abs(M_UPPER * L1 / 2 * Math.cos(a1) + (M_FORE + tip) * E[0] + tip * L2 * Math.cos(a2) + M_FORE * L2 / 2 * Math.cos(a2)) / 1000;
+  const stackedExtra = 14 * Math.abs(E[0]) / 1000; // what S2 would add if it sat at the elbow
+  const pct = m => `${(100 * m / STALL).toFixed(0)}%`;
+  $("r").innerHTML =
+    `<div><b>Wrist</b> x ${W[0].toFixed(0)} mm, y ${W[1].toFixed(0)} mm</div>` +
+    `<div><b>Joint gap</b> <span class="${safe ? "ok" : "bad"}">${rel}° ${safe ? "clear of dead centre" : "too close to dead centre"}</span></div>` +
+    `<div><b>S1 torque</b> ${(Mshoulder / 10).toFixed(2)} kg·cm (${pct(Mshoulder)} of stall)</div>` +
+    `<div><b>S2 torque</b> ${(Melbow / 10).toFixed(2)} kg·cm (${pct(Melbow)} of stall)</div>` +
+    `<div><b>Saved on S1</b> ${(stackedExtra / 10).toFixed(2)} kg·cm by not carrying S2 at the elbow</div>`;
+}
+["s1", "s2", "pl", "lvl"].forEach(id => $(id).addEventListener("input", draw));
+draw();
+</script>
+</body>
+</html>
